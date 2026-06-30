@@ -5,9 +5,9 @@ from pathlib import Path
 
 import google.generativeai as genai
 from dotenv import load_dotenv
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 
@@ -189,5 +189,18 @@ def chat(req: ChatRequest):
     return {"reply": build_reply(req.message)}
 
 
-if not os.getenv("VERCEL"):
-    app.mount("/", StaticFiles(directory=str(BASE_DIR), html=True), name="static")
+@app.get("/")
+def index():
+    return FileResponse(BASE_DIR / "index.html")
+
+
+@app.get("/{asset_path:path}")
+def static_asset(asset_path: str):
+    if asset_path.startswith("api/"):
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    target = (BASE_DIR / asset_path).resolve()
+    if not target.is_relative_to(BASE_DIR) or not target.is_file():
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    return FileResponse(target)
