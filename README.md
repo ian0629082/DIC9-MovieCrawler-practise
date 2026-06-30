@@ -14,6 +14,50 @@
 - 使用 Gemini API 回答電影相關問題
 - 支援部署到 Vercel
 
+## 技術架構與前後端細節
+
+本專案採用「靜態前端 + FastAPI 後端 API」的方式架設，部署時由 Vercel 負責提供網站與 API 路由。
+
+### 前端
+
+- 使用 `index.html` 作為主要頁面，沒有額外使用 React、Vue 或 Bootstrap 等前端框架。
+- 頁面樣式直接寫在 `<style>` 中，互動功能使用原生 JavaScript。
+- 電影列表資料會被寫入頁面中，用於前端搜尋、分類篩選與電影卡片顯示。
+- 聊天助理功能會透過 `fetch('/api/chat')` 呼叫後端 API，再把回覆顯示在頁面上。
+- `build_html.py` 會讀取 `movies.json`，重新產生包含電影資料與前端互動邏輯的 `index.html`。
+
+### 後端
+
+- 後端使用 FastAPI，主要程式位於 `api/index.py`。
+- 本機開發時由 `main.py` 啟動 Uvicorn server，網址為 `http://127.0.0.1:8000`。
+- API 啟動時會讀取 `movies.json`，並提供電影查詢、分類查詢與聊天功能。
+- 使用 `CORSMiddleware` 開放跨來源請求，方便前端呼叫 API。
+- `/api/chat` 會優先使用 Gemini API 產生回覆；如果沒有設定 `GEMINI_API_KEY`，會改用本地電影資料進行簡易查詢回覆。
+- `/` 會回傳 `index.html`，其他靜態資源如 `posters/*.png` 也由 FastAPI 回傳。
+
+### API 路由
+
+| 方法 | 路由 | 說明 |
+|------|------|------|
+| GET | `/api/movies` | 取得電影列表，可用 `category`、`search`、`limit` 查詢 |
+| GET | `/api/movies/{movie_id}` | 依電影編號取得單一電影資料 |
+| GET | `/api/categories` | 取得所有電影分類 |
+| POST | `/api/chat` | 傳入聊天訊息，回傳 Gemini 或本地資料查詢結果 |
+
+### 資料處理流程
+
+- `crawler.py`：從 `ssr1.scrape.center` 爬取電影資料，輸出 `movies.csv`。
+- `download_jpg.py`：依照電影資料下載海報圖片。
+- `to_excel.py`：將 CSV 與海報整理成 `movies_with_posters.xlsx`。
+- `build_html.py`：把 `movies.json` 轉成可直接展示的 `index.html`。
+- `movies.json` / `movies.csv`：作為前端展示與後端 API 的主要資料來源。
+
+### 部署架構
+
+- `vercel.json` 將 `/api/(.*)` 轉發到 `api/index.py`，由 Vercel 執行 FastAPI API。
+- 靜態首頁與圖片資源由 FastAPI 的 `FileResponse` 回傳。
+- Gemini 金鑰不寫入程式碼，部署時透過 Vercel Environment Variables 設定。
+
 ## 專案結構
 
 ```text
@@ -21,9 +65,14 @@
 ├── api/
 │   └── index.py              # FastAPI / Vercel API 入口
 ├── posters/                  # GitHub README 可顯示的電影海報 PNG
+├── build_html.py             # 由 movies.json 產生 index.html
+├── crawler.py                # 爬取電影資料並輸出 CSV
+├── download_jpg.py           # 下載電影海報
 ├── index.html                # 網站首頁
+├── main.py                   # 本機 FastAPI / Uvicorn 啟動入口
 ├── movies.json               # 電影資料 JSON
 ├── movies.csv                # 電影資料 CSV
+├── to_excel.py               # 產生含海報的 Excel 檔
 ├── requirements.txt          # Python 套件
 ├── vercel.json               # Vercel 路由設定
 ├── VERCEL_DEPLOY.md          # Vercel 部署說明
@@ -43,6 +92,8 @@ GEMINI_MODEL=gemini-2.5-flash
 
 ## 本機執行
 
+安裝後端與部署所需套件：
+
 ```bash
 pip install -r requirements.txt
 python main.py
@@ -53,6 +104,8 @@ python main.py
 ```text
 http://127.0.0.1:8000
 ```
+
+如果需要重新爬取資料或輸出 Excel，會另外用到 `requests`、`beautifulsoup4`、`openpyxl` 等資料處理套件。
 
 ## Vercel 部署
 
